@@ -16,6 +16,25 @@ what is dangerous and how to fix it.
 - **Zero dependencies.** One small package; audit the source in a few minutes.
 - **CI-ready.** Exit codes, `--json`, and `--sarif` for GitHub code scanning.
 
+## What your agents can do without asking you
+
+Every time you click "don't ask again", the approval is written to a settings file and stays
+there. Every run starts with an inventory of what has piled up, dangerous or not:
+
+```text
+What your AI agents can do without asking you
+    42  pre-approved permission rule(s) in 7 file(s), 31 of them shell commands
+       Bash(git push:*)
+       Bash(npm run build:*)
+       … and 29 more (--list shows all)
+     5  MCP server(s) start with your agent, 3 of them from unpinned packages
+     2  hook command(s) run automatically
+     9  instruction file(s) are loaded by agents whether or not you have read them
+```
+
+(Example output.) With `--global`, projects that Claude Code has opened are looked up from
+`~/.claude.json`, so approvals saved in each project's `.claude/settings.local.json` are counted too.
+
 ## What it checks
 
 | ID | Severity | Finding |
@@ -92,11 +111,11 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - run: npx --yes agentcfg-audit@0.1.1 --sarif --fail-on none > agentcfg.sarif
+      - run: npx --yes agentcfg-audit@0.2.0 --sarif --fail-on none > agentcfg.sarif
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: agentcfg.sarif
-      - run: npx --yes agentcfg-audit@0.1.1
+      - run: npx --yes agentcfg-audit@0.2.0
 ```
 
 ## Limits

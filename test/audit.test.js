@@ -165,3 +165,24 @@ test('CLI: exit codes, JSON and SARIF output', () => {
   assert.strictEqual(sarif.version, '2.1.0');
   assert.strictEqual(sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri, '.claude/settings.json');
 });
+
+test('summary: inventory of what agents can do without asking, even when nothing is dangerous', () => {
+  const cli = path.join(__dirname, '..', 'bin', 'cli.js');
+  const dir = fixture({
+    '.claude/settings.local.json': { permissions: { allow: ['Bash(npm test)', 'Bash(git status)', 'Read(src/**)'] } },
+    '.mcp.json': { mcpServers: {
+      a: { command: 'npx', args: ['-y', 'some-mcp@1.2.3'] },
+      b: { command: 'npx', args: ['-y', 'other-mcp'] },
+    } },
+    'CLAUDE.md': 'Use pnpm.\n',
+  });
+  const json = JSON.parse(execFileSync(process.execPath, [cli, dir, '--json', '--fail-on', 'none'], { encoding: 'utf8' }));
+  assert.strictEqual(json.summary.preApprovedRules, 3);
+  assert.strictEqual(json.summary.preApprovedShellRules, 2);
+  assert.deepStrictEqual(json.summary.mcpServers, ['a', 'b']);
+  assert.deepStrictEqual(json.summary.unpinnedMcpServers, ['b']);
+  assert.strictEqual(json.summary.instructionFiles, 1);
+  const text = execFileSync(process.execPath, [cli, dir, '--no-color', '--fail-on', 'none'], { encoding: 'utf8' });
+  assert.match(text, /What your AI agents can do without asking you/);
+  assert.match(text, /Bash\(npm test\)/);
+});

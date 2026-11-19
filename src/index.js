@@ -227,9 +227,11 @@ function auditMcpServer(ctx, name, s) {
   checkEnvSecrets(ctx, s.env, `MCP server "${name}" env`);
   checkEnvSecrets(ctx, s.headers, `MCP server "${name}" headers`);
 
+  const pkg = tokens.length ? runnerPackage(tokens) : null;
+  const state = pkg && pinState(pkg);
+  ctx.inv.mcp.push({ name, file: ctx.file, unpinned: state === 'unpinned' || state === 'remote' });
+
   if (tokens.length) {
-    const pkg = runnerPackage(tokens);
-    const state = pkg && pinState(pkg);
     if (state === 'unpinned' || state === 'remote') {
       ctx.add('MCP001', 'medium', `MCP server "${name}" runs an unpinned package: ${trunc(pkg.spec, 80)}`, {
         needle: pkg.spec,
@@ -309,6 +311,7 @@ function auditClaudeSettings(ctx, j) {
 
   for (const rule of Array.isArray(perms.allow) ? perms.allow : []) {
     if (typeof rule !== 'string') continue;
+    ctx.inv.allow.push({ rule, file: ctx.file });
     if (/^(Bash|PowerShell)(\((\*|:\*|\*:\*)\))?$/.test(rule)) {
       ctx.add('CC002', 'high', `Allow rule "${rule}" lets the agent run any shell command without asking`, {
         needle: rule, detail: where,
@@ -356,6 +359,7 @@ function auditClaudeSettings(ctx, j) {
   }
 
   for (const cmd of collectCommands(j.hooks)) {
+    ctx.inv.hooks.push({ command: cmd, file: ctx.file });
     if (NET.test(cmd) || OBFUSCATED.test(cmd) || SENSITIVE.test(cmd)) {
       ctx.add('CC007', 'high', 'Hook command touches the network, credentials or obfuscated code', {
         needle: cmd, detail: trunc(cmd),
@@ -480,6 +484,11 @@ function auditInstructions(ctx) {
 
 // ---------------------------------------------------------------- file dispatch
 
+// Inventory: everything agents may do or load without asking, risky or not.
+function newInventory() {
+  return { allow: [], mcp: [], hooks: [], instructions: [] };
+}
+
 function classify(file) {
   const base = path.basename(file).toLowerCase();
   if (base.endsWith('.toml')) return 'toml';
@@ -499,6 +508,7 @@ function scanFile(file, opts = {}) {
     file,
     text,
     project: opts.scope !== 'global',
+    inv: opts.inv || newInventory(),
     add(rule, severity, title, o = {}) {
       findings.push({
         rule, severity, title, file,
@@ -511,8 +521,7 @@ function scanFile(file, opts = {}) {
 
   scanSecrets(ctx);
   const kind = classify(file);
-  if (kind === 'instructions') auditInstructions(ctx);
-  else if (kind === 'toml') auditCodexToml(ctx);
+  if (kind === 'instructions') { ctx.inv.instructions.push(file); auditInstructions(ctx); } else if (kind === 'toml') auditCodexToml(ctx);
   else {
     let j;
     try { j = parseJsonc(text); } catch {
@@ -585,6 +594,15 @@ function globalFiles() {
     for (const code of ['Code', 'Code - Insiders', 'Cursor', 'VSCodium']) out.push(path.join(base, code, 'User', 'mcp.json'));
   }
   for (const sub of ['commands', 'agents', 'skills']) walk(path.join(home, '.claude', sub), 4, out);
+  // "Don't ask again" approvals are saved per project. Claude Code records every project it
+  // has opened in ~/.claude.json, so follow those paths to the settings where approvals pile up.
+  try {
+    const known = parseJsonc(fs.readFileSync(path.join(home, '.claude.json'), 'utf8')).projects || {};
+    for (const dir of Object.keys(known).slice(0, 500)) {
+      if (!path.isAbsolute(dir)) continue;
+      out.push(path.join(dir, '.claude', 'settings.json'), path.join(dir, '.claude', 'settings.local.json'), path.join(dir, '.mcp.json'));
+    }
+  } catch { /* no ~/.claude.json, or unreadable */ }
   return [...new Set(out)].filter((f) => { try { return fs.statSync(f).isFile(); } catch { return false; } });
 }
 
@@ -606,11 +624,12 @@ function scan(root, opts = {}) {
 
   const ignore = new Set(opts.ignore || []);
   const findings = [];
+  const inventory = newInventory();
   for (const { file, scope } of files) {
-    for (const f of scanFile(file, { scope })) if (!ignore.has(f.rule)) findings.push(f);
+    for (const f of scanFile(file, { scope, inv: inventory })) if (!ignore.has(f.rule)) findings.push(f);
   }
   findings.sort((a, b) => SEV[b.severity] - SEV[a.severity] || a.file.localeCompare(b.file) || a.line - b.line);
-  return { files: files.map((f) => f.file), findings };
+  return { files: files.map((f) => f.file), findings, inventory };
 }
 
 module.exports = { scan, scanFile, parseJsonc, SEV };

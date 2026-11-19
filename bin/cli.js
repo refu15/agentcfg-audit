@@ -23,6 +23,7 @@ Options
       --fail-on <sev>   exit 1 when a finding at or above: high | medium | low | none
                         (default: high)
       --ignore <ids>    comma-separated rule IDs to skip, e.g. MCP001,CC008
+      --list            list every pre-approved rule, MCP server and hook, not just a sample
       --no-color        disable ANSI colours
   -h, --help            show this help
   -v, --version         show version
@@ -38,6 +39,7 @@ function parseArgs(argv) {
     else if (a === '--global-only') { o.global = true; o.globalOnly = true; } else if (a === '--json') o.json = true;
     else if (a === '--sarif') o.sarif = true;
     else if (a === '--no-color') o.noColor = true;
+    else if (a === '--list') o.list = true;
     else if (a === '--fail-on') o.failOn = argv[++i];
     else if (a.startsWith('--fail-on=')) o.failOn = a.slice(10);
     else if (a === '--ignore') o.ignore = String(argv[++i] || '').split(',').filter(Boolean);
@@ -56,6 +58,44 @@ function display(file, root) {
   const home = path.relative(os.homedir(), file);
   if (home && !home.startsWith('..') && !path.isAbsolute(home)) return `~/${home.replace(/\\/g, '/')}`;
   return file;
+}
+
+// "What can my agents do without asking me?" Shown on every run, clean or not.
+function summarize(inv) {
+  const uniq = (list) => [...new Set(list)];
+  const shell = inv.allow.filter((a) => /^(Bash|PowerShell)\b/.test(a.rule));
+  return {
+    preApprovedRules: inv.allow.length,
+    preApprovedShellRules: shell.length,
+    filesWithApprovals: uniq(inv.allow.map((a) => a.file)).length,
+    shellRules: uniq(shell.map((a) => a.rule)),
+    otherRules: uniq(inv.allow.filter((a) => !shell.includes(a)).map((a) => a.rule)),
+    mcpServers: uniq(inv.mcp.map((m) => m.name)),
+    unpinnedMcpServers: uniq(inv.mcp.filter((m) => m.unpinned).map((m) => m.name)),
+    hooks: inv.hooks.map((h) => h.command),
+    instructionFiles: inv.instructions.length,
+  };
+}
+
+function summaryLines(s, c, list) {
+  const out = [];
+  const sample = (items, n) => {
+    const shown = list ? items : items.slice(0, n);
+    for (const it of shown) out.push(`       ${c(2, it.length > 90 ? `${it.slice(0, 90)}…` : it)}`);
+    if (items.length > shown.length) out.push(`       ${c(2, `… and ${items.length - shown.length} more (--list shows all)`)}`);
+  };
+  const row = (n, text) => out.push(`  ${c(1, String(n).padStart(4))}  ${text}`);
+  out.push(c(1, 'What your AI agents can do without asking you'));
+  row(s.preApprovedRules, `pre-approved permission rule(s) in ${s.filesWithApprovals} file(s), ${s.preApprovedShellRules} of them shell commands`);
+  sample(s.shellRules, 6);
+  if (list) sample(s.otherRules, 0);
+  row(s.mcpServers.length, `MCP server(s) start with your agent, ${s.unpinnedMcpServers.length} of them from unpinned packages`);
+  sample(s.mcpServers, 6);
+  row(s.hooks.length, 'hook command(s) run automatically');
+  sample(s.hooks, 3);
+  row(s.instructionFiles, 'instruction file(s) are loaded by agents whether or not you have read them');
+  out.push('');
+  return out;
 }
 
 function toSarif(findings, root) {
@@ -109,6 +149,7 @@ function main() {
     return 2;
   }
   const { files, findings } = result;
+  const summary = summarize(result.inventory);
   const failed = o.failOn !== 'none' && findings.some((f) => SEV[f.severity] >= SEV[o.failOn]);
 
   if (o.sarif) {
@@ -117,6 +158,7 @@ function main() {
     process.stdout.write(`${JSON.stringify({
       version: pkg.version,
       scannedFiles: files.map((f) => display(f, root)),
+      summary,
       findings: findings.map((f) => ({ ...f, file: display(f.file, root) })),
     }, null, 2)}\n`);
   } else {
@@ -128,8 +170,9 @@ function main() {
     out.push('');
     if (!files.length) {
       out.push('No AI agent configuration found here. Try: agentcfg-audit --global');
-    } else if (!findings.length) {
-      out.push(c(32, '✔ No issues found.'));
+    } else {
+      out.push(...summaryLines(summary, c, o.list));
+      if (!findings.length) out.push(c(32, '✔ No known-dangerous settings found.'));
     }
     for (const f of findings) {
       out.push(`${badge[f.severity]} ${c(1, f.title)}`);
