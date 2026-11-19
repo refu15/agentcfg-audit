@@ -179,7 +179,7 @@ test('summary: inventory of what agents can do without asking, even when nothing
   const json = JSON.parse(execFileSync(process.execPath, [cli, dir, '--json', '--fail-on', 'none'], { encoding: 'utf8' }));
   assert.strictEqual(json.summary.preApprovedRules, 3);
   assert.strictEqual(json.summary.preApprovedShellRules, 2);
-  assert.deepStrictEqual(json.summary.mcpServers, ['a', 'b']);
+  assert.deepStrictEqual(json.summary.mcpServers, ['b', 'a'], 'unpinned servers are listed first');
   assert.deepStrictEqual(json.summary.unpinnedMcpServers, ['b']);
   assert.strictEqual(json.summary.instructionFiles, 1);
   const text = execFileSync(process.execPath, [cli, dir, '--no-color', '--fail-on', 'none'], { encoding: 'utf8' });

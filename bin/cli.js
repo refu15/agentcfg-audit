@@ -64,6 +64,10 @@ function display(file, root) {
 function summarize(inv) {
   const uniq = (list) => [...new Set(list)];
   const shell = inv.allow.filter((a) => /^(Bash|PowerShell)\b/.test(a.rule));
+  // Broadest first: rules that amount to "run anything" lead the sample.
+  const broad = /^(Bash|PowerShell)(\((\*|:\*|(curl|wget|sh|bash|zsh|python3?|node|eval|sudo|rm|powershell|pwsh|ssh|nc|npx|docker|chmod|env|xargs)\b.*\*)\))?$/;
+  shell.sort((a, b) => broad.test(b.rule) - broad.test(a.rule));
+  inv.mcp.sort((a, b) => b.unpinned - a.unpinned);
   return {
     preApprovedRules: inv.allow.length,
     preApprovedShellRules: shell.length,
@@ -90,7 +94,7 @@ function summaryLines(s, c, list) {
   sample(s.shellRules, 6);
   if (list) sample(s.otherRules, 0);
   row(s.mcpServers.length, `MCP server(s) start with your agent, ${s.unpinnedMcpServers.length} of them from unpinned packages`);
-  sample(s.mcpServers, 6);
+  sample(s.mcpServers.map((n) => (s.unpinnedMcpServers.includes(n) ? `${n}  (unpinned: runs whatever is published today)` : n)), 6);
   row(s.hooks.length, 'hook command(s) run automatically');
   sample(s.hooks, 3);
   row(s.instructionFiles, 'instruction file(s) are loaded by agents whether or not you have read them');
