@@ -1,0 +1,45 @@
+{
+  "name": "agentcfg-audit",
+  "version": "0.1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/refu15/agentcfg-audit.git"
+  },
+  "homepage": "https://github.com/refu15/agentcfg-audit#readme",
+  "bugs": {
+    "url": "https://github.com/refu15/agentcfg-audit/issues"
+  },
+  "description": "Audit AI coding agent configs (Claude Code, Cursor, MCP, Codex, Gemini CLI, Windsurf, Copilot) for leaked secrets, risky permissions, unpinned MCP servers and hidden prompt injection. Zero dependencies, fully offline.",
+  "bin": {
+    "agentcfg-audit": "bin/cli.js"
+  },
+  "main": "src/index.js",
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "security",
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "cursor",
+    "codex",
+    "ai-agent",
+    "prompt-injection",
+    "secrets",
+    "audit",
+    "scanner",
+    "sarif",
+    "supply-chain"
+  ],
+  "license": "MIT"
+}
