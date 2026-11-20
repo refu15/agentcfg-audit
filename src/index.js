@@ -315,6 +315,18 @@ function passwordInCommand(rule) {
   return null;
 }
 
+// The inventory prints approved commands verbatim, so blank out anything secret first.
+function maskSecrets(text) {
+  let out = text;
+  for (const [, re] of SECRET_PATTERNS) out = out.replace(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`), (m) => redact(m));
+  for (let i = 0; i < COMMAND_SECRETS.length; i++) {
+    const pw = passwordInCommand(out);
+    if (!pw) break;
+    out = out.split(pw.value).join('****');
+  }
+  return out;
+}
+
 function auditClaudeSettings(ctx, j) {
   const perms = j.permissions && typeof j.permissions === 'object' ? j.permissions : {};
   const where = ctx.project ? 'A repository-level setting applies to everyone who opens this repo.' : '';
@@ -329,7 +341,7 @@ function auditClaudeSettings(ctx, j) {
 
   for (const rule of Array.isArray(perms.allow) ? perms.allow : []) {
     if (typeof rule !== 'string') continue;
-    ctx.inv.allow.push({ rule, file: ctx.file });
+    ctx.inv.allow.push({ rule: maskSecrets(rule), file: ctx.file });
     // "Yes, and don't ask again" saves the literal command, so a password typed on the command
     // line ends up in the settings file. Known token formats are already caught by SEC001.
     const pw = !knownSecret(rule) && passwordInCommand(rule);
@@ -341,7 +353,7 @@ function auditClaudeSettings(ctx, j) {
       });
     }
     if (/^(Bash|PowerShell)(\((\*|:\*|\*:\*)\))?$/.test(rule)) {
-      ctx.add('CC002', 'high', `Allow rule "${rule}" lets the agent run any shell command without asking`, {
+      ctx.add('CC002', 'high', `Allow rule "${maskSecrets(rule)}" lets the agent run any shell command without asking`, {
         needle: rule, detail: where,
         fix: 'Replace it with narrow rules such as "Bash(npm test)" or "Bash(git status)".',
       });
@@ -349,7 +361,7 @@ function auditClaudeSettings(ctx, j) {
     }
     const m = /^(?:Bash|PowerShell)\(([\w.-]+)(?::\*|\s\*|\*)\)$/.exec(rule);
     if (m && DANGEROUS_BASH.has(m[1].toLowerCase())) {
-      ctx.add('CC003', 'medium', `Allow rule "${rule}" pre-approves an arbitrary-execution command`, {
+      ctx.add('CC003', 'medium', `Allow rule "${maskSecrets(rule)}" pre-approves an arbitrary-execution command`, {
         needle: rule,
         detail: `"${m[1]}" with any arguments is equivalent to unrestricted shell access (downloads, interpreters, privilege escalation).`,
         fix: 'Allow only the exact invocations you need, or leave this command on "ask".',
@@ -387,15 +399,15 @@ function auditClaudeSettings(ctx, j) {
   }
 
   for (const cmd of collectCommands(j.hooks)) {
-    ctx.inv.hooks.push({ command: cmd, file: ctx.file });
+    ctx.inv.hooks.push({ command: maskSecrets(cmd), file: ctx.file });
     if (NET.test(cmd) || OBFUSCATED.test(cmd) || SENSITIVE.test(cmd)) {
       ctx.add('CC007', 'high', 'Hook command touches the network, credentials or obfuscated code', {
-        needle: cmd, detail: trunc(cmd),
+        needle: cmd, detail: trunc(maskSecrets(cmd)),
         fix: 'Hooks run automatically with your privileges. Remove this hook unless you wrote it and understand it.',
       });
     } else if (ctx.project) {
       ctx.add('CC008', 'low', 'Repository ships a hook that runs automatically during agent sessions', {
-        needle: cmd, detail: trunc(cmd), fix: 'Review the command before trusting this repository.',
+        needle: cmd, detail: trunc(maskSecrets(cmd)), fix: 'Review the command before trusting this repository.',
       });
     }
   }

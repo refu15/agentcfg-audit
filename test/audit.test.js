@@ -205,4 +205,11 @@ test('SEC003: passwords saved inside "don\'t ask again" command approvals', () =
   const f = scan(dir).findings.filter((x) => x.rule === 'SEC003');
   assert.strictEqual(f.length, 6, f.map((x) => x.title).join('\n'));
   assert.ok(!JSON.stringify(f).includes('S3cretPass'), 'values are redacted');
+  const cli = path.join(__dirname, '..', 'bin', 'cli.js');
+  for (const args of [['--json'], ['--list', '--no-color'], ['--sarif']]) {
+    const out = execFileSync(process.execPath, [cli, dir, ...args, '--fail-on', 'none'], { encoding: 'utf8' });
+    for (const s of ['S3cretPass', 'hunter2pw', 'pgS3cret', 'abcd1234efgh5678', 'adminpw123', 'zzzz9999yyyy']) {
+      assert.ok(!out.includes(s), `${s} leaked in ${args.join(' ')}`);
+    }
+  }
 });
