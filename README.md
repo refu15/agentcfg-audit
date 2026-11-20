@@ -49,6 +49,7 @@ To remove an approval, you can ask your agent too: *"Remove the curl and rm appr
 |----|----------|---------|
 | SEC001 | high | Known credential formats in any agent file (Anthropic, OpenAI, GitHub, AWS, Slack, Google, GitLab, npm, Stripe, JWT, private keys, URLs with passwords) |
 | SEC002 | medium | High-entropy literal in a secret-looking `env` / `headers` key |
+| SEC003 | high | Password or token saved inside an approved command ("Yes, and don't ask again" stores the literal command, e.g. `mysql -pSECRET`, `sshpass -p`, `PGPASSWORD=`, auth headers) |
 | MCP001 | medium | MCP server launched from an unpinned package (`npx -y pkg`, `uvx pkg`, `pnpm dlx`, git URL without commit) |
 | MCP002 | high | MCP server command downloads or decodes code and executes it (`curl … \| sh`, `base64 -d`) |
 | MCP003 | medium | Remote MCP server over plain `http://` |

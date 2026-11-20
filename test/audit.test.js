@@ -186,3 +186,23 @@ test('summary: inventory of what agents can do without asking, even when nothing
   assert.match(text, /What your AI agents can do without asking you/);
   assert.match(text, /Bash\(npm test\)/);
 });
+
+test('SEC003: passwords saved inside "don\'t ask again" command approvals', () => {
+  const dir = fixture({
+    '.claude/settings.local.json': { permissions: { allow: [
+      'Bash(mysql -u root -pS3cretPass! mydb)',
+      'Bash(sshpass -p hunter2pw ssh root@10.0.0.5)',
+      'Bash(PGPASSWORD=pgS3cret psql -h db -U app)',
+      'Bash(curl -H "Authorization: Bearer abcd1234efgh5678" https://api.example.com)',
+      'Bash(curl -u admin:adminpw123 https://example.com)',
+      'Bash(curl https://api.example.com/x?api_key=zzzz9999yyyy)',
+      'Bash(mysql -u root -p mydb)',
+      'Bash(npm run dev -- -p 3000)',
+      'Bash(PGPASSWORD=$PGPASSWORD psql)',
+      'Bash(docker login --password-stdin)',
+    ] } },
+  });
+  const f = scan(dir).findings.filter((x) => x.rule === 'SEC003');
+  assert.strictEqual(f.length, 6, f.map((x) => x.title).join('\n'));
+  assert.ok(!JSON.stringify(f).includes('S3cretPass'), 'values are redacted');
+});

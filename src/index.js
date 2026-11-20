@@ -297,6 +297,24 @@ function collectCommands(node, out = []) {
   return out;
 }
 
+const COMMAND_SECRETS = [
+  ['MySQL password', /\b(?:mysql|mariadb|mysqldump|mysqladmin)\b[^)]*?\s-p(?!\s)([^\s)'"]{4,})/],
+  ['sshpass password', /\bsshpass\s+-p\s*['"]?([^\s)'"]{4,})/],
+  ['--password flag', /--password[=\s]+['"]?([^\s)'"$][^\s)'"]{3,})/],
+  ['password variable', /\b(?:PGPASSWORD|MYSQL_PWD|REDISCLI_AUTH|PASSWORD|PASSWD)=['"]?([^\s)'"$][^\s)'"]{3,})/i],
+  ['auth header', /-H\s*['"]?(?:authorization|x-api-key|api-key|x-auth-token|private-token)\s*:\s*(?:bearer\s+|token\s+|basic\s+)?([^\s)'"$][^\s)'"]{7,})/i],
+  ['basic auth', /\bcurl\b[^)]*?\s(?:-u|--user)\s+['"]?[^\s:'"]+:([^\s)'"$][^\s)'"]{3,})/],
+  ['token in URL', /[?&](?:token|api_key|apikey|access_token|key|password)=([^\s&)'"$][^\s&)'"]{7,})/i],
+];
+
+function passwordInCommand(rule) {
+  for (const [kind, re] of COMMAND_SECRETS) {
+    const m = re.exec(rule);
+    if (m && !isRef(m[1]) && !isPlaceholder(m[1])) return { kind, value: m[1] };
+  }
+  return null;
+}
+
 function auditClaudeSettings(ctx, j) {
   const perms = j.permissions && typeof j.permissions === 'object' ? j.permissions : {};
   const where = ctx.project ? 'A repository-level setting applies to everyone who opens this repo.' : '';
@@ -312,6 +330,16 @@ function auditClaudeSettings(ctx, j) {
   for (const rule of Array.isArray(perms.allow) ? perms.allow : []) {
     if (typeof rule !== 'string') continue;
     ctx.inv.allow.push({ rule, file: ctx.file });
+    // "Yes, and don't ask again" saves the literal command, so a password typed on the command
+    // line ends up in the settings file. Known token formats are already caught by SEC001.
+    const pw = !knownSecret(rule) && passwordInCommand(rule);
+    if (pw) {
+      ctx.add('SEC003', 'high', `Password or token saved inside an approved command (${pw.kind})`, {
+        needle: rule,
+        detail: redact(pw.value),
+        fix: 'Delete this rule, rotate the credential, and if the file was ever committed, treat it as leaked (old commits and forks keep it).',
+      });
+    }
     if (/^(Bash|PowerShell)(\((\*|:\*|\*:\*)\))?$/.test(rule)) {
       ctx.add('CC002', 'high', `Allow rule "${rule}" lets the agent run any shell command without asking`, {
         needle: rule, detail: where,
