@@ -1,39 +1,47 @@
 # agentcfg-audit
 
-**Find the security holes in your AI coding agent setup in five seconds.**
+**For people who use Claude Code or Cursor and have clicked "don't ask again".**
 
-```bash
-npx agentcfg-audit --global
-```
+Every approval you gave stays until you remove it. If your agent reads a malicious file or web
+page and follows instructions hidden in it, approved commands run with no prompt. With `curl` or
+`rm` approved, that can mean:
 
-AI coding agents (Claude Code, Cursor, Codex, Gemini CLI, Windsurf, Copilot…) are configured through
-JSON, TOML and Markdown files that nobody reviews: API keys pasted into `mcp.json`, MCP servers
-launched with `npx -y whatever`, `Bash(*)` allow-rules committed to a repo, and rule files that can
-carry instructions invisible to a human reader. `agentcfg-audit` reads those files and tells you
-what is dangerous and how to fix it.
+- your API keys or files get sent somewhere
+- your files get deleted
 
-- **Offline and read-only.** No network calls, no telemetry, nothing is executed. Secrets are redacted in output.
-- **Zero dependencies.** One small package; audit the source in a few minutes.
-- **CI-ready.** Exit codes, `--json`, and `--sarif` for GitHub code scanning.
+Most people don't remember what they approved. This lists it.
 
-## What your agents can do without asking you
+## Try it
 
-Every time you click "don't ask again", the approval is written to a settings file and stays
-there. Every run starts with an inventory of what has piled up, dangerous or not:
+Ask your agent:
 
 ```text
-What your AI agents can do without asking you
-    42  pre-approved permission rule(s) in 7 file(s), 31 of them shell commands
-       Bash(git push:*)
-       Bash(npm run build:*)
-       … and 29 more (--list shows all)
-     5  MCP server(s) start with your agent, 3 of them from unpinned packages
-     2  hook command(s) run automatically
-     9  instruction file(s) are loaded by agents whether or not you have read them
+Run npx github:refu15/agentcfg-audit --global and explain the results
 ```
 
-(Example output.) With `--global`, projects that Claude Code has opened are looked up from
-`~/.claude.json`, so approvals saved in each project's `.claude/settings.local.json` are counted too.
+Or run it yourself:
+
+```bash
+npx github:refu15/agentcfg-audit --global
+```
+
+![Sample output: 37 pre-approved rules including curl, rm and ssh](docs/demo.png)
+
+*Output from a sample setup.*
+
+It shows, every time:
+
+- every pre-approved command, broadest first (`curl`, `rm`, `ssh`…)
+- MCP servers that start with your agent, and which ones download whatever is published today
+- hooks that run automatically
+- instruction files your agent reads whether or not you have
+- API keys left in config files, and other risky settings, with how to fix them
+
+It only reads files. No network calls, no dependencies, nothing is changed.
+With `--global`, projects Claude Code has opened are looked up from `~/.claude.json`, so approvals
+saved in each project's `.claude/settings.local.json` are counted too.
+
+To remove an approval, you can ask your agent too: *"Remove the curl and rm approvals from my settings."*
 
 ## What it checks
 
@@ -80,11 +88,11 @@ Claude Desktop `claude_desktop_config.json`, `~/.cursor/mcp.json`, Windsurf `mcp
 ## Usage
 
 ```bash
-npx agentcfg-audit                 # audit the current repository
-npx agentcfg-audit --global        # …plus your user-level agent configs
-npx agentcfg-audit --global-only   # only your machine, no repository
-npx agentcfg-audit path/to/repo --fail-on medium
-npx agentcfg-audit --ignore CC008,MCP006 --json
+npx github:refu15/agentcfg-audit                 # audit the current repository
+npx github:refu15/agentcfg-audit --global        # …plus your user-level agent configs
+npx github:refu15/agentcfg-audit --global-only   # only your machine, no repository
+npx github:refu15/agentcfg-audit path/to/repo --fail-on medium
+npx github:refu15/agentcfg-audit --ignore CC008,MCP006 --json
 ```
 
 Exit code is `1` when a finding at or above `--fail-on` (default `high`) exists, `2` on usage errors.
@@ -92,7 +100,7 @@ Exit code is `1` when a finding at or above `--fail-on` (default `high`) exists,
 ### Before you open a repository you just cloned
 
 ```bash
-npx agentcfg-audit ./that-repo --fail-on low
+npx github:refu15/agentcfg-audit ./that-repo --fail-on low
 ```
 
 Repository-level agent files (`.mcp.json`, `.claude/settings.json`, rule files) are an attack surface:
@@ -127,14 +135,17 @@ foot-guns in the config", not "safe".
 
 ## 日本語
 
-AIコーディングエージェント（Claude Code / Cursor / Codex / Gemini CLI / Windsurf / Copilot）の設定ファイルを
-監査する、依存ゼロ・完全オフラインのCLIです。MCP設定に直書きされたAPIキー、バージョン未固定の
-MCPサーバー、`Bash(*)` などの危険な許可ルール、ルールファイルに埋め込まれた不可視文字による
-プロンプトインジェクションを検出し、修正方法を表示します。
+Claude Code や Cursor で「今後は確認しない」を押したことがある人向けのツールです。
 
-```bash
-npx agentcfg-audit --global
+許可したコマンドは、消すまでずっと有効です。AIが怪しいファイルを読むと、確認なしで APIキーやファイルを外に送られたり、ファイルを消されたりすることがあります。
+
+AIにこう頼むと、何を任せっぱなしにしているか分かります。
+
+```text
+npx github:refu15/agentcfg-audit --global を実行して結果を説明して
 ```
+
+解説記事：https://zenn.dev/kalda/articles/32e5d2f22df106
 
 ## License
 
